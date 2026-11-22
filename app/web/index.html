@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LightShift · Banc d'inspection</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231D2A33'/%3E%3Crect x='8' y='7' width='16' height='3' rx='1.5' fill='%23F2B33D'/%3E%3Cpath d='M16 13l6 3.5v7L16 27l-6-3.5v-7z' fill='%23E6EAEC'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1D2A33;          /* ardoise : texte, cabine */
+    --ink-soft: #52616B;
+    --steel: #E6EAEC;        /* fond d'atelier */
+    --panel: #FBFCFC;
+    --line: #CBD3D8;
+    --pass: #2F7D4F;         /* vert conformité */
+    --pass-bg: #E3F1E8;
+    --fail: #C8372D;         /* rouge sécurité */
+    --fail-bg: #FBE6E3;
+    --lamp: #F2B33D;         /* ambre lampe : réservé à l'éclairage */
+    --radius-s: 6px;
+    --radius-m: 12px;
+    --s-base: #C9761C;        /* série « modèle d'origine » (graphiques) */
+    --s-light: #3567B0;       /* série « LightShift » (graphiques) */
+    --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; font-family: var(--font); color: var(--ink); background: var(--steel);
+    font-size: 16px; line-height: 1.5; font-variation-settings: "wdth" 100;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; border-radius: 4px; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------------------------------------------------------------- en-tête */
+  .topbar {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    padding: 18px clamp(16px, 4vw, 40px); background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px; margin-right: auto; }
+  .brand h1 {
+    margin: 0; font-size: 1.55rem; line-height: 1; font-weight: 850; letter-spacing: -0.01em;
+    font-variation-settings: "wdth" 125;
+  }
+  .brand p { margin: 0; color: var(--ink-soft); font-size: .95rem; }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--ink-soft); }
+  .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .status[data-state="ok"] .dot { background: var(--pass); }
+  .status[data-state="demo"] .dot { background: var(--lamp); }
+  .status[data-state="down"] .dot { background: var(--fail); }
+
+  .segmented { display: inline-flex; background: var(--steel); border-radius: 999px; padding: 3px; }
+  .segmented button {
+    border: 0; background: transparent; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+    font-size: .92rem; color: var(--ink-soft);
+  }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+  /* ---------------------------------------------------------------- étapes */
+  .steps {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; list-style: none; margin: 0;
+    padding: 0 clamp(16px, 4vw, 40px); background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .steps li { display: flex; gap: 10px; align-items: center; padding: 12px 0; color: var(--ink-soft); font-size: .93rem; }
+  .steps li span {
+    flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    border: 1.5px solid currentColor; font-size: .8rem; font-weight: 700;
+  }
+  .steps li[data-done="true"] { color: var(--ink); }
+  .steps li[data-done="true"] span { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+  /* ---------------------------------------------------------------- mise en page */
+  main { max-width: 1240px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 64px; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 900px) {
+    .bench { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    .steps li { padding: 6px 0; }
+  }
+  h2 { font-size: 1.15rem; margin: 0 0 4px; font-weight: 750; font-variation-settings: "wdth" 112; }
+  .hint { margin: 0; color: var(--ink-soft); font-size: .95rem; max-width: 62ch; }
+
+  /* ---------------------------------------------------------------- cabine lumineuse */
+  .booth {
+    position: relative; background: var(--ink); border-radius: var(--radius-m); padding: 14px;
+    box-shadow: inset 0 0 0 1px #2C3B45;
+  }
+  .lamp-bar {
+    height: 6px; border-radius: 999px; margin: 0 22% 14px; background: var(--lamp-color, #F4F1E8);
+    box-shadow: 0 0 22px 4px var(--lamp-glow, rgba(244, 241, 232, .35)); transition: background .3s, box-shadow .3s;
+  }
+  .stage {
+    position: relative; aspect-ratio: 1 / 1; max-height: 560px; margin: 0 auto; border-radius: var(--radius-s);
+    overflow: hidden; background: #26353F;
+  }
+  .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .stage .overlay { opacity: 0; transition: opacity .15s linear; }
+  .dropzone {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #C9D3D9;
+    border: 2px dashed #4A5B66; border-radius: var(--radius-s); padding: 24px; cursor: pointer;
+  }
+  .dropzone.drag { border-color: var(--lamp); color: #fff; }
+  .dropzone strong { display: block; font-size: 1.15rem; color: #fff; margin-bottom: 6px; }
+  .dropzone .examples { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .busy {
+    position: absolute; inset: auto 12px 12px auto; background: rgba(29, 42, 51, .85); color: #fff;
+    padding: 6px 12px; border-radius: 999px; font-size: .85rem; display: none;
+  }
+  .stage[data-busy="true"] .busy { display: block; }
+  .stage.drag { box-shadow: 0 0 0 3px var(--lamp); }
+
+  .booth-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-top: 14px; color: #DCE3E7; font-size: .92rem; }
+  .booth-controls label { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; }
+  .booth-controls input[type=range] { flex: 1; accent-color: var(--fail); }
+  .source-note { margin: 10px 0 0; color: #AEBBC3; font-size: .85rem; min-height: 1.2em; overflow-wrap: anywhere; }
+  .link-btn { background: none; border: 0; color: #DCE3E7; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 4px 0; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--radius-s);
+    padding: 10px 16px; border: 1.5px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer;
+    font-weight: 600; font-size: .95rem;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.light { background: #fff; color: var(--ink); border-color: #fff; }
+  .btn.light-ghost { background: transparent; color: #fff; border-color: #6B7C87; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ---------------------------------------------------------------- console d'éclairage */
+  .console { margin-top: 22px; }
+  .console-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .lights { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+  .light {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left;
+    padding: 10px 12px; border-radius: var(--radius-s); border: 1.5px solid var(--line); background: var(--panel); cursor: pointer;
+  }
+  .light .swatch { width: 100%; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+  .light span { font-size: .9rem; line-height: 1.25; }
+  .light[aria-pressed="true"] { border-color: var(--lamp); box-shadow: 0 0 0 2px var(--lamp) inset; background: #FFF9EC; }
+  .severity { display: flex; align-items: center; gap: 10px; font-size: .92rem; color: var(--ink-soft); }
+  .severity .segmented { background: var(--panel); border: 1px solid var(--line); }
+  .severity[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+  /* ---------------------------------------------------------------- verdict (étiquette QC) */
+  .side { display: flex; flex-direction: column; gap: 22px; position: sticky; top: 20px; }
+  @media (max-width: 900px) { .side { position: static; } }
+  .tag {
+    position: relative; background: var(--panel); border-radius: var(--radius-m) var(--radius-m) var(--radius-m) 40px;
+    padding: 26px 24px 22px 24px; border: 2px solid var(--line); min-height: 250px;
+  }
+  .tag::before {               /* œillet de l'étiquette */
+    content: ""; position: absolute; top: 18px; right: 20px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--steel); box-shadow: inset 0 0 0 2px var(--line);
+  }
+  .tag[data-verdict="pass"] { border-color: var(--pass); background: var(--pass-bg); }
+  .tag[data-verdict="fail"] { border-color: var(--fail); background: var(--fail-bg); }
+  .tag .kicker { font-size: .9rem; color: var(--ink-soft); margin: 0 0 6px; }
+  .tag .verdict {
+    margin: 0; font-size: clamp(2rem, 4vw, 2.7rem); line-height: 1; font-weight: 900; letter-spacing: -0.02em;
+    font-variation-settings: "wdth" 125;
+  }
+  .tag[data-verdict="pass"] .verdict { color: var(--pass); }
+  .tag[data-verdict="fail"] .verdict { color: var(--fail); }
+  .tag[data-verdict="idle"] .verdict { color: #9AA7AF; }
+  .tag .explain { margin: 14px 0 0; font-size: 1rem; max-width: 40ch; }
+  .tag.stamp { animation: stamp .38s cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes stamp { from { transform: scale(1.06) rotate(-1.2deg); } to { transform: none; } }
+
+  .gauge { margin-top: 20px; }
+  .gauge-track { position: relative; height: 12px; border-radius: 999px; background: rgba(29, 42, 51, .12); }
+  .gauge-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; background: var(--ink-soft); transition: width .35s ease; }
+  .tag[data-verdict="pass"] .gauge-fill { background: var(--pass); }
+  .tag[data-verdict="fail"] .gauge-fill { background: var(--fail); }
+  .gauge-limit { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--ink); border-radius: 2px; left: 50%; transition: left .35s ease; }
+  .gauge-legend { display: flex; justify-content: space-between; font-size: .82rem; color: var(--ink-soft); margin-top: 8px; }
+
+  .advice { margin-top: 16px; padding: 12px 14px; border-radius: var(--radius-s); background: #FFF6E0; border-left: 4px solid var(--lamp); font-size: .94rem; display: none; }
+  .advice.show { display: block; }
+
+  details { margin-top: 16px; font-size: .92rem; }
+  summary { cursor: pointer; color: var(--ink-soft); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 10px 0 0; }
+  dt { color: var(--ink-soft); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 20px; }
+  .method .segmented { margin-top: 12px; width: 100%; }
+  .method .segmented button { flex: 1; }
+
+  /* ---------------------------------------------------------------- côte à côte */
+  .duo { margin-top: 40px; }
+  .duo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+  @media (max-width: 700px) { .duo-grid { grid-template-columns: 1fr; } }
+  .duo-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 14px; }
+  .duo-card header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .duo-card h3 { margin: 0; font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .duo-img { aspect-ratio: 1 / 1; width: 100%; border-radius: var(--radius-s); background: #26353F; display: block; object-fit: contain; }
+  .chip { font-size: .85rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--steel); color: var(--ink-soft); }
+  .chip[data-verdict="pass"] { background: var(--pass-bg); color: var(--pass); }
+  .chip[data-verdict="fail"] { background: var(--fail-bg); color: var(--fail); }
+  .duo-card p { margin: 10px 0 0; font-size: .93rem; color: var(--ink-soft); }
+  .series-mark { width: 10px; height: 10px; display: inline-block; flex: none; }
+  .series-mark.baseline { background: var(--s-base); border-radius: 50%; }
+  .series-mark.lightshift { background: var(--s-light); border-radius: 2px; }
+
+  /* ---------------------------------------------------------------- dérive */
+  .drift { margin-top: 40px; }
+  .drift-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+  .drift-panel { margin-top: 14px; position: relative; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: .9rem; margin-bottom: 8px; color: var(--ink); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend .limit-key { width: 18px; border-top: 2px dashed var(--ink); }
+  .chart-scroll { overflow-x: auto; }
+  #driftChart { width: 100%; min-width: 760px; height: auto; display: block; overflow: visible; }
+  #driftChart .grid { stroke: #E3E8EB; }
+  #driftChart .axis-text { fill: var(--ink-soft); font-size: 11px; }
+  #driftChart .group-text { fill: var(--ink); font-size: 12px; font-weight: 600; }
+  #driftChart .hit { fill: transparent; cursor: pointer; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: .85rem; padding: 8px 10px;
+    border-radius: var(--radius-s); white-space: nowrap; transform: translate(-50%, calc(-100% - 12px)); display: none;
+  }
+  .drift-empty { color: var(--ink-soft); font-size: .95rem; padding: 28px 0; }
+  .drift table { border-collapse: collapse; margin-top: 10px; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .drift th, .drift td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); }
+
+  /* ---------------------------------------------------------------- recalibration */
+  .recal { margin-top: 40px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 28px; }
+  @media (max-width: 900px) { .recal { grid-template-columns: 1fr; } }
+  .recal-why p { margin: 10px 0 0; max-width: 58ch; }
+  .recal-why ol { margin: 12px 0 0; padding-left: 20px; }
+  .recal-why li { margin-bottom: 6px; }
+  .field { margin-top: 16px; }
+  .field > span { display: block; font-weight: 600; margin-bottom: 8px; font-size: .95rem; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice { border: 1.5px solid var(--line); background: #fff; border-radius: var(--radius-s); padding: 8px 12px; cursor: pointer; font-size: .92rem; }
+  .choice[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+  .recal-light { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--steel); border-radius: var(--radius-s); font-size: .94rem; }
+  .recal-light .swatch { width: 28px; height: 18px; border-radius: 4px; flex: none; border: 1px solid rgba(0,0,0,.1); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .result-line { margin-top: 14px; font-size: .98rem; min-height: 1.5em; }
+  .result-line.ok { color: var(--pass); }
+  .result-line.err { color: var(--fail); }
+  .before-after { display: flex; align-items: center; gap: 14px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  .before-after b { font-size: 1.6rem; font-variation-settings: "wdth" 115; }
+  .before-after s { color: var(--ink-soft); font-size: 1.1rem; }
+
+  /* ---------------------------------------------------------------- historique */
+  .history { margin-top: 40px; }
+  .history-list { display: flex; gap: 12px; overflow-x: auto; padding: 12px 2px 6px; list-style: none; margin: 0; }
+  .history-list li { flex: none; width: 112px; font-size: .8rem; color: var(--ink-soft); }
+  .history-list img { width: 112px; height: 112px; object-fit: cover; border-radius: var(--radius-s); display: block; border: 3px solid var(--line); }
+  .history-list li[data-verdict="pass"] img { border-color: var(--pass); }
+  .history-list li[data-verdict="fail"] img { border-color: var(--fail); }
+  .history-empty { color: var(--ink-soft); font-size: .94rem; margin: 8px 0 0; }
+
+  .banner { display: none; margin: 0 0 20px; padding: 12px 16px; border-radius: var(--radius-s); background: var(--fail-bg); color: #7A1F18; border: 1px solid #EBB8B2; }
+  .banner.show { display: block; }
+
+  footer { max-width: 1240px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px) 40px; color: var(--ink-soft); font-size: .88rem; }
+  footer a { color: inherit; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>LightShift</h1>
+    <p>Contrôle qualité qui ne se laisse pas tromper par la lumière</p>
+  </div>
+  <div class="segmented" role="group" aria-label="Type de pièce" id="categories"></div>
+  <div class="status" id="status" data-state="loading" role="status"><span class="dot"></span><span>Connexion…</span></div>
+</header>
+
+<ol class="steps" aria-label="Déroulement">
+  <li id="step1"><span>1</span>Posez une pièce dans la cabine</li>
+  <li id="step2"><span>2</span>Changez la lumière de l'atelier</li>
+  <li id="step3"><span>3</span>Lisez le verdict et recalibrez si besoin</li>
+</ol>
+
+<main>
+  <div class="banner" id="banner" role="alert"></div>
+
+  <section class="bench">
+    <!-- ---------------------------------------------------------- cabine -->
+    <div>
+      <div class="booth">
+        <div class="lamp-bar" id="lampBar" aria-hidden="true"></div>
+        <div class="stage" id="stage" data-busy="false">
+          <img id="photo" alt="" hidden>
+          <img id="overlay" class="overlay" alt="Zones suspectes en couleur" hidden>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choisir une photo de pièce">
+            <div>
+              <strong>Déposez une photo de pièce ici</strong>
+              ou cliquez pour en choisir une (PNG ou JPG)
+              <div class="examples">
+                <button class="btn light" type="button" data-example="good">Essayer une pièce saine</button>
+                <button class="btn light-ghost" type="button" data-example="bad">Essayer une pièce abîmée</button>
+              </div>
+            </div>
+          </div>
+          <div class="busy" aria-hidden="true">Analyse…</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/png,image/jpeg" class="visually-hidden">
+        <div class="booth-controls" id="boothControls" hidden>
+          <label>Zones suspectes
+            <input type="range" id="overlayRange" min="0" max="100" value="55" aria-label="Afficher les zones suspectes">
+          </label>
+          <button class="link-btn" type="button" id="changePart">Choisir une photo sur mon PC</button>
+          <button class="link-btn" type="button" data-example="good">Pièce saine</button>
+          <button class="link-btn" type="button" data-example="bad">Pièce abîmée</button>
+        </div>
+        <p class="source-note" id="sourceNote" aria-live="polite"></p>
+      </div>
+
+      <!-- ---------------------------------------------------------- console -->
+      <div class="console">
+        <div class="console-head">
+          <div>
+            <h2>Lumière de l'atelier</h2>
+            <p class="hint">Simulez une lampe qui vieillit, une autre machine ou une ombre. Ce sont les mêmes changements que dans nos expériences.</p>
+          </div>
+          <div class="severity" id="severityWrap" aria-disabled="true">
+            Intensité
+            <div class="segmented" role="group" aria-label="Intensité du changement" id="severity">
+              <button type="button" data-sev="1" aria-pressed="false">Légère</button>
+              <button type="button" data-sev="2" aria-pressed="true">Moyenne</button>
+              <button type="button" data-sev="3" aria-pressed="false">Forte</button>
+            </div>
+          </div>
+        </div>
+        <div class="lights" role="group" aria-label="Type d'éclairage" id="lights"></div>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------- verdict -->
+    <aside class="side">
+      <div class="tag" id="tag" data-verdict="idle" aria-live="polite">
+        <p class="kicker" id="tagKicker">Verdict</p>
+        <p class="verdict" id="verdict">En attente</p>
+        <p class="explain" id="explain">Posez une pièce dans la cabine : le modèle dira si elle est conforme et montrera où il voit un problème.</p>
+        <div class="gauge" id="gauge" hidden>
+          <div class="gauge-track" aria-hidden="true">
+            <div class="gauge-fill" id="gaugeFill"></div>
+            <div class="gauge-limit" id="gaugeLimit"></div>
+          </div>
+          <div class="gauge-legend"><span>Rien à signaler</span><span id="limitLabel">Limite 0,50</span><span>Très suspect</span></div>
+        </div>
+        <div class="advice" id="advice"></div>
+        <details id="details" hidden>
+          <summary>Détails techniques</summary>
+          <dl>
+            <dt>Score de suspicion</dt><dd id="dScore">–</dd>
+            <dt>Limite utilisée</dt><dd id="dLimit">–</dd>
+            <dt>Méthode</dt><dd id="dMethod">–</dd>
+            <dt>Temps d'analyse</dt><dd id="dTime">–</dd>
+            <dt>Version du modèle</dt><dd id="dVersion">–</dd>
+            <dt>Latence médiane (p50)</dt><dd id="dP50">–</dd>
+            <dt>Latence p95</dt><dd id="dP95">–</dd>
+          </dl>
+        </details>
+      </div>
+
+      <div class="panel method">
+        <h2>Méthode de détection</h2>
+        <p class="hint">Comparez le modèle d'origine avec la version adaptée à la lumière.</p>
+        <div class="segmented" role="group" aria-label="Méthode" id="methods">
+          <button type="button" data-method="baseline" aria-pressed="true">Modèle d'origine</button>
+          <button type="button" data-method="lightshift" aria-pressed="false">LightShift</button>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ---------------------------------------------------------- côte à côte -->
+  <section class="duo" aria-labelledby="duoTitle">
+    <h2 id="duoTitle">Les deux méthodes sur la même pièce</h2>
+    <p class="hint">Même photo, même lumière : à gauche le PatchCore d'origine, à droite la version adaptée à la lumière.</p>
+    <div class="duo-grid">
+      <article class="duo-card" id="duo-baseline">
+        <header><h3><span class="series-mark baseline" aria-hidden="true"></span>Modèle d'origine</h3><span class="chip">En attente</span></header>
+        <img class="duo-img" alt="" hidden>
+        <p>Posez une pièce dans la cabine pour comparer.</p>
+      </article>
+      <article class="duo-card" id="duo-lightshift">
+        <header><h3><span class="series-mark lightshift" aria-hidden="true"></span>LightShift</h3><span class="chip">En attente</span></header>
+        <img class="duo-img" alt="" hidden>
+        <p>Posez une pièce dans la cabine pour comparer.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- dérive -->
+  <section class="drift" aria-labelledby="driftTitle">
+    <div class="drift-head">
+      <div>
+        <h2 id="driftTitle">Comment le score dérive avec la lumière</h2>
+        <p class="hint">La même pièce passe sous les 15 lumières de l'expérience. Un point au-dessus de la ligne pointillée déclenche une alerte.</p>
+      </div>
+      <button class="btn ghost" type="button" id="driftBtn" disabled>Mesurer la dérive de cette pièce</button>
+    </div>
+    <div class="panel drift-panel">
+      <div class="legend" id="driftLegend" hidden>
+        <span><i class="series-mark baseline"></i>Modèle d'origine</span>
+        <span><i class="series-mark lightshift"></i>LightShift</span>
+        <span><i class="limit-key"></i>Limite d'alerte</span>
+      </div>
+      <p class="drift-empty" id="driftEmpty">Posez une pièce, puis mesurez sa dérive.</p>
+      <div class="chart-scroll"><svg id="driftChart" viewBox="0 0 960 340" role="img" aria-labelledby="driftTitle" hidden></svg></div>
+      <div class="tooltip" id="driftTip" role="status"></div>
+      <details id="driftTableWrap" hidden><summary>Voir les valeurs</summary><div id="driftTable"></div></details>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- recalibration -->
+  <section class="recal" aria-labelledby="recalTitle">
+    <div class="recal-why">
+      <h2 id="recalTitle">Recalibrer pour une nouvelle lumière</h2>
+      <p>Quand la lumière change, même une pièce parfaite peut paraître suspecte. Plutôt que de réentraîner le modèle, on lui montre quelques pièces saines sous la nouvelle lumière et il ajuste sa limite.</p>
+      <ol>
+        <li>Choisissez la lumière dans la console ci-dessus.</li>
+        <li>Donnez des photos de pièces saines prises sous cette lumière.</li>
+        <li>Choisissez combien de fausses alertes vous tolérez.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <div class="recal-light"><span class="swatch" id="recalSwatch"></span><span id="recalLightLabel">Lumière : normale</span></div>
+
+      <div class="field">
+        <span>Pièces saines à utiliser</span>
+        <div class="choices" role="group" aria-label="Source des pièces saines" id="recalSource">
+          <button type="button" class="choice" data-source="generated" aria-pressed="true">Pièces saines d'exemple</button>
+          <button type="button" class="choice" data-source="upload" aria-pressed="false">Mes propres photos</button>
+        </div>
+        <input type="file" id="recalFiles" accept="image/png,image/jpeg" multiple class="visually-hidden">
+        <p class="hint" id="recalSourceHint" style="margin-top:8px"></p>
+      </div>
+
+      <div class="field">
+        <span>Fausses alertes tolérées</span>
+        <div class="choices" role="group" aria-label="Fausses alertes tolérées" id="alphas">
+          <button type="button" class="choice" data-alpha="0.05" aria-pressed="false">1 sur 20</button>
+          <button type="button" class="choice" data-alpha="0.1" aria-pressed="true">1 sur 10</button>
+          <button type="button" class="choice" data-alpha="0.2" aria-pressed="false">1 sur 5</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="button" id="recalBtn">Recalibrer pour cette lumière</button>
+        <button class="btn ghost" type="button" id="resetBtn">Revenir à la limite d'origine</button>
+      </div>
+      <div class="before-after" id="beforeAfter" hidden><s id="baBefore"></s><span aria-hidden="true">devient</span><b id="baAfter"></b></div>
+      <p class="result-line" id="recalResult" role="status"></p>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- historique -->
+  <section class="history" aria-labelledby="histTitle">
+    <h2 id="histTitle">Pièces inspectées</h2>
+    <p class="history-empty" id="historyEmpty">Les pièces que vous inspectez apparaîtront ici, avec leur verdict.</p>
+    <ul class="history-list" id="history"></ul>
+  </section>
+</main>
+
+<footer>
+  Basé sur PatchCore (détection d'anomalies par comparaison avec des pièces saines) et le jeu de données MVTec AD.
+  <a href="/docs">Documentation de l'API</a>
+</footer>
+
+<script>
+(() => {
+  // ------------------------------------------------------------------ données
+  const CATEGORIES = { metal_nut: "Écrou", screw: "Vis", transistor: "Transistor" };
+  const LIGHTS = [
+    { id: null,                label: "Normale",            swatch: "linear-gradient(90deg,#f4f4f2,#e9eaea)", lamp: "#F4F1E8" },
+    { id: "brightness",        label: "Plus sombre",        swatch: "linear-gradient(90deg,#8d8f90,#6c6e70)", lamp: "#9C9A92" },
+    { id: "contrast",          label: "Contraste faible",   swatch: "linear-gradient(90deg,#b9bbbc,#a9abac)", lamp: "#D6D4CC" },
+    { id: "gamma",             label: "Gamma modifié",      swatch: "linear-gradient(90deg,#e7e8e8,#5c5f61)", lamp: "#C9C6BC" },
+    { id: "color_temperature", label: "Lumière jaune",      swatch: "linear-gradient(90deg,#f6dfa8,#e7c27a)", lamp: "#F2B33D" },
+    { id: "shading",           label: "Ombre sur le côté",  swatch: "linear-gradient(90deg,#5e6163,#efefed)", lamp: "#E8E4D8" },
+  ];
+  const SEV_LABEL = { 1: "légère", 2: "moyenne", 3: "forte" };
+  const fmt = (x, d = 2) => Number(x).toFixed(d).replace(".", ",");
+  // 3 décimales quand l'arrondi à 2 ferait croire que score et limite sont égaux
+  const pair = (a, b) => (fmt(a) === fmt(b) ? [fmt(a, 3), fmt(b, 3)] : [fmt(a), fmt(b)]);
+
+  const state = {
+    category: "metal_nut", method: "baseline", shift: null, severity: 2, alpha: 0.1,
+    source: "generated", image: null,   // { blob, name, kind: "good"|"bad"|"upload", url }
+    backend: null, history: [], requestId: 0, calibratedFor: null, driftFor: null, examplesSource: {}, calibPool: {},
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  // ------------------------------------------------------------------ pièces d'exemple (générées par le serveur)
+  async function exampleBlob(kind, seed) {
+    const resp = await fetch(`/examples/${state.category}?kind=${kind}&seed=${seed}`);
+    if (!resp.ok) {
+      let detail = "Impossible de charger la pièce d'exemple.";
+      try { detail = (await resp.json()).detail || detail; } catch { /* corps non JSON */ }
+      throw new Error(detail);
+    }
+    const blob = await resp.blob();
+    blob.meta = { source: resp.headers.get("X-Example-Source"), name: resp.headers.get("X-Example-Name"), defect: resp.headers.get("X-Example-Defect") };
+    return blob;
+  }
+
+  // ------------------------------------------------------------------ API
+  async function api(path, opts = {}) {
+    const resp = await fetch(path, opts);
+    let body = null;
+    try { body = await resp.json(); } catch { /* corps vide */ }
+    if (!resp.ok) throw new Error((body && body.detail) || `Erreur ${resp.status}`);
+    return body;
+  }
+
+  async function checkHealth() {
+    const st = $("status");
+    try {
+      const h = await api("/health");
+      state.backend = h.model_backend;
+      state.examplesSource = h.examples_source || {};
+      state.calibPool = h.calibration_pool || {};
+      updateRecalHint();
+      if (h.status !== "ok") { st.dataset.state = "down"; st.lastElementChild.textContent = "Modèle indisponible"; showBanner("Le modèle n'est pas chargé (fichiers du modèle manquants). Les analyses sont impossibles pour l'instant."); }
+      else if (h.model_backend === "mock") { st.dataset.state = "demo"; st.lastElementChild.textContent = "Modèle de démonstration"; st.title = "Les scores sont simulés : le vrai PatchCore n'est pas encore branché."; }
+      else { st.dataset.state = "ok"; st.lastElementChild.textContent = "PatchCore connecté"; }
+    } catch {
+      st.dataset.state = "down"; st.lastElementChild.textContent = "Serveur injoignable";
+      showBanner("Le serveur ne répond pas. Lancez l'API avec : python -m uvicorn app.api.main:app");
+    }
+  }
+
+  function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.classList.toggle("show", !!msg); }
+
+  // ------------------------------------------------------------------ rendu des contrôles
+  function renderCategories() {
+    const wrap = $("categories"); wrap.innerHTML = "";
+    Object.entries(CATEGORIES).forEach(([id, label]) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+      b.setAttribute("aria-pressed", String(id === state.category));
+      b.onclick = () => { state.category = id; renderCategories(); updateRecalHint(); if (state.image && state.image.kind !== "upload") loadExample(state.image.kind); else analyse(); };
+      wrap.appendChild(b);
+    });
+  }
+
+  function renderLights() {
+    const wrap = $("lights"); wrap.innerHTML = "";
+    LIGHTS.forEach((l) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "light";
+      b.setAttribute("aria-pressed", String(l.id === state.shift));
+      b.innerHTML = `<div class="swatch" style="background:${l.swatch}"></div><span>${l.label}</span>`;
+      b.onclick = () => { state.shift = l.id; renderLights(); analyse(); };
+      wrap.appendChild(b);
+    });
+    const cur = LIGHTS.find((l) => l.id === state.shift);
+    $("lampBar").style.setProperty("--lamp-color", cur.lamp);
+    $("lampBar").style.setProperty("--lamp-glow", cur.lamp + "66");
+    $("severityWrap").setAttribute("aria-disabled", String(state.shift === null));
+    $("recalSwatch").style.background = cur.swatch;
+    $("recalLightLabel").textContent = state.shift ? `Lumière : ${cur.label.toLowerCase()}, intensité ${SEV_LABEL[state.severity]}` : "Lumière : normale";
+    $("step2").dataset.done = String(state.shift !== null);
+  }
+
+  function bindPressedGroup(groupId, attr, onPick) {
+    $(groupId).addEventListener("click", (e) => {
+      const btn = e.target.closest("button"); if (!btn) return;
+      [...$(groupId).querySelectorAll("button")].forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      onPick(btn.dataset[attr]);
+    });
+  }
+
+  // ------------------------------------------------------------------ chargement d'une pièce
+  async function setImage(blob, name, kind) {
+    state.image = { blob, name, kind, url: URL.createObjectURL(blob) };
+    const meta = blob.meta || {};
+    $("sourceNote").textContent = kind === "upload" ? `Votre photo : ${name}`
+      : meta.source === "mvtec" ? `Photo réelle MVTec AD : ${meta.name}${meta.defect ? ` (défaut : ${meta.defect.replaceAll("_", " ")})` : ""}`
+      : "Pièce d'exemple dessinée (mode démo)";
+    $("dropzone").hidden = true; $("boothControls").hidden = false;
+    $("step1").dataset.done = "true";
+    analyse();
+  }
+
+  async function loadExample(kind) {
+    const seed = Math.floor(Math.random() * 1000) + 1;
+    try { setImage(await exampleBlob(kind, seed), `exemple-${state.category}-${kind}.png`, kind); }
+    catch (err) { showBanner(err.message); }
+  }
+
+  function pickFile(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { showBanner("Ce fichier n'est pas une image PNG ou JPG. Choisissez une photo de pièce."); return; }
+    showBanner("");
+    setImage(file, file.name, "upload");
+  }
+
+  // ------------------------------------------------------------------ analyse
+  function predictForm(method) {
+    const fd = new FormData();
+    fd.append("image", state.image.blob, state.image.name);
+    fd.append("category", state.category);
+    fd.append("method", method);
+    if (state.shift) { fd.append("shift", state.shift); fd.append("severity", String(state.severity)); }
+    return fd;
+  }
+
+  async function analyse() {
+    if (!state.image) return;
+    const id = ++state.requestId;
+    $("stage").dataset.busy = "true";
+    const methods = ["baseline", "lightshift"];
+    const results = await Promise.allSettled(methods.map((m) => api("/predict", { method: "POST", body: predictForm(m) })));
+    if (id !== state.requestId) return;   // une analyse plus récente est en cours
+    $("stage").dataset.busy = "false";
+    const byMethod = Object.fromEntries(methods.map((m, i) => [m, results[i]]));
+    const main = byMethod[state.method];
+    if (main.status === "fulfilled") { showBanner(""); renderResult(main.value); }
+    else renderError(main.reason.message);
+    renderDuo(byMethod);
+    refreshLatency();
+    $("driftBtn").disabled = false;
+    if (state.backend === "mock" && state.driftFor !== state.image.url) measureDrift();
+  }
+
+  function renderDuo(byMethod) {
+    Object.entries(byMethod).forEach(([m, res]) => {
+      const card = $(`duo-${m}`), chip = card.querySelector(".chip"), img = card.querySelector("img"), p = card.querySelector("p");
+      if (res.status === "fulfilled") {
+        const r = res.value, fail = r.decision === "anomaly";
+        const [sTxt, tTxt] = pair(r.score, r.threshold);
+        chip.dataset.verdict = fail ? "fail" : "pass";
+        chip.textContent = fail ? "Défaut détecté" : "Conforme";
+        img.src = `data:image/png;base64,${r.anomaly_map}`; img.hidden = false;
+        img.alt = `Résultat ${m === "baseline" ? "du modèle d'origine" : "de LightShift"}, zones suspectes en rouge`;
+        p.textContent = `Score ${sTxt}, limite ${tTxt}${r.threshold_source === "calibrated" ? " (recalibrée)" : ""}.`;
+      } else {
+        chip.dataset.verdict = ""; chip.textContent = "Indisponible";
+        img.hidden = true; p.textContent = res.reason.message;
+      }
+    });
+  }
+
+  async function refreshLatency() {
+    try {
+      const m = await api("/metrics");
+      $("dP50").textContent = m.latency_ms.p50 == null ? "–" : `${Math.round(m.latency_ms.p50)} ms`;
+      $("dP95").textContent = m.latency_ms.p95 == null ? "–" : `${Math.round(m.latency_ms.p95)} ms (sur ${m.latency_ms.window} analyses)`;
+    } catch { /* indicatif seulement */ }
+  }
+
+  // ------------------------------------------------------------------ dérive du score
+  const SHIFT_LABEL = Object.fromEntries(LIGHTS.map((l) => [l.id ?? "normal", l.label]));
+  const METHOD_LABEL = { baseline: "Modèle d'origine", lightshift: "LightShift" };
+
+  async function measureDrift() {
+    if (!state.image) return;
+    const btn = $("driftBtn"); btn.disabled = true; btn.textContent = "Mesure en cours…";
+    state.driftFor = state.image.url;
+    try {
+      const fd = new FormData();
+      fd.append("image", state.image.blob, state.image.name);
+      fd.append("category", state.category);
+      renderDrift(await api("/drift", { method: "POST", body: fd }));
+    } catch (err) {
+      $("driftEmpty").hidden = false; $("driftEmpty").textContent = err.message;
+    } finally { btn.disabled = false; btn.textContent = "Mesurer la dérive de cette pièce"; }
+  }
+
+  function renderDrift(data) {
+    const svg = $("driftChart"), NS = "http://www.w3.org/2000/svg";
+    const W = 960, H = 340, L = 46, R = 150, T = 30, B = 62;
+    const ok = data.series.filter((sr) => !sr.error && sr.points.length);
+    if (!ok.length) { $("driftEmpty").hidden = false; $("driftEmpty").textContent = data.series.map((sr) => sr.error).join(" "); return; }
+    $("driftEmpty").hidden = true; svg.removeAttribute("hidden"); $("driftLegend").hidden = false; $("driftTableWrap").hidden = false;
+    const pts = ok[0].points;
+    // position horizontale : un écart entre chaque groupe de lumière
+    let units = [], u = 0, prev = undefined;
+    pts.forEach((pt) => { if (prev !== undefined && pt.shift !== prev) u += 0.9; units.push(u); u += 1; prev = pt.shift; });
+    const maxU = units[units.length - 1];
+    const x = (i) => L + 14 + (units[i] / maxU) * (W - L - R - 28);
+    const ymax = Math.max(1, ...ok.flatMap((sr) => sr.points.map((p) => p.score)), ...ok.map((sr) => sr.threshold)) ;
+    const y = (v) => T + (1 - v / ymax) * (H - T - B);
+    const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+    svg.innerHTML = "";
+
+    for (let v = 0; v <= ymax + 1e-9; v += 0.25) {
+      svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }));
+      svg.appendChild(el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", class: "axis-text" }, fmt(v)));
+    }
+    svg.appendChild(el("text", { x: L, y: 12, class: "axis-text" }, "Score de suspicion"));
+
+    // libellés : intensité sous chaque point, nom de lumière sous chaque groupe
+    const groups = {};
+    pts.forEach((pt, i) => {
+      const key = pt.shift ?? "normal";
+      (groups[key] ||= []).push(i);
+      if (pt.severity) svg.appendChild(el("text", { x: x(i), y: H - B + 18, "text-anchor": "middle", class: "axis-text" }, ["", "L", "M", "F"][pt.severity]));
+    });
+    Object.entries(groups).forEach(([key, idx]) => {
+      const cx = (x(idx[0]) + x(idx[idx.length - 1])) / 2;
+      const label = SHIFT_LABEL[key];
+      const words = label.split(" ");
+      const lines = label.length > 12 && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")] : [label];
+      lines.forEach((ln, k) => svg.appendChild(el("text", { x: cx, y: H - B + 38 + k * 14, "text-anchor": "middle", class: "group-text" }, ln)));
+    });
+
+    // limites
+    const same = ok.length === 2 && Math.abs(ok[0].threshold - ok[1].threshold) < 1e-6;
+    (same ? [ok[0]] : ok).forEach((sr) => {
+      svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(sr.threshold), y2: y(sr.threshold), stroke: same ? "#1D2A33" : (sr.method === "baseline" ? "#C9761C" : "#3567B0"), "stroke-width": 2, "stroke-dasharray": "6 5" }));
+      const txt = same ? `Limite ${fmt(sr.threshold)}` : `Limite ${sr.method === "baseline" ? "origine" : "LightShift"} ${fmt(sr.threshold)}`;
+      svg.appendChild(el("text", { x: W - R + 8, y: y(sr.threshold) + 4, class: "axis-text" }, txt));
+    });
+
+    // séries : segments à l'intérieur de chaque groupe, marqueurs (rond / carré)
+    ok.forEach((sr) => {
+      const color = sr.method === "baseline" ? "#C9761C" : "#3567B0";
+      Object.values(groups).forEach((idx) => {
+        if (idx.length > 1) svg.appendChild(el("polyline", { points: idx.map((i) => `${x(i)},${y(sr.points[i].score)}`).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
+      });
+      const dx = sr.method === "baseline" ? -3 : 3;   // léger décalage : les deux marqueurs restent visibles s'ils se superposent
+      sr.points.forEach((pt, i) => {
+        const cx = x(i) + dx, cy = y(pt.score);
+        svg.appendChild(sr.method === "baseline"
+          ? el("circle", { cx, cy, r: 5.5, fill: color, stroke: "#FBFCFC", "stroke-width": 2 })
+          : el("rect", { x: cx - 5, y: cy - 5, width: 10, height: 10, rx: 2, fill: color, stroke: "#FBFCFC", "stroke-width": 2 }));
+      });
+    });
+
+    // zones de survol (plus larges que les points)
+    const tip = $("driftTip"), panel = svg.parentElement;
+    pts.forEach((pt, i) => {
+      const half = (x(1) - x(0)) / 2;
+      const hit = el("rect", { x: x(i) - half, y: T, width: half * 2, height: H - T - B, class: "hit", tabindex: 0 });
+      const show = () => {
+        const cond = pt.shift ? `${SHIFT_LABEL[pt.shift]}, intensité ${SEV_LABEL[pt.severity]}` : "Lumière normale";
+        tip.innerHTML = `<strong>${cond}</strong><br>` + ok.map((sr) => `${METHOD_LABEL[sr.method]} : ${fmt(sr.points[i].score)}${sr.points[i].alert ? " (alerte)" : ""}`).join("<br>");
+        const box = svg.getBoundingClientRect(), pbox = panel.getBoundingClientRect(), k = box.width / W;
+        tip.style.left = `${box.left - pbox.left + x(i) * k}px`;
+        tip.style.top = `${box.top - pbox.top + y(Math.max(...ok.map((sr) => sr.points[i].score))) * k}px`;
+        tip.style.display = "block";
+      };
+      hit.addEventListener("mouseenter", show); hit.addEventListener("focus", show);
+      hit.addEventListener("mouseleave", () => (tip.style.display = "none")); hit.addEventListener("blur", () => (tip.style.display = "none"));
+      svg.appendChild(hit);
+    });
+
+    // vue tableau
+    $("driftTable").innerHTML = `<table><thead><tr><th>Lumière</th>${ok.map((sr) => `<th>${METHOD_LABEL[sr.method]}</th>`).join("")}</tr></thead><tbody>` +
+      pts.map((pt, i) => `<tr><td>${pt.shift ? `${SHIFT_LABEL[pt.shift]}, ${SEV_LABEL[pt.severity]}` : "Normale"}</td>${ok.map((sr) => `<td>${fmt(sr.points[i].score)}${sr.points[i].alert ? " alerte" : ""}</td>`).join("")}</tr>`).join("") +
+      `</tbody></table>`;
+  }
+
+  function renderResult(r) {
+    const photo = $("photo"), overlay = $("overlay");
+    photo.src = r.processed_image ? `data:image/png;base64,${r.processed_image}` : state.image.url;
+    overlay.src = `data:image/png;base64,${r.anomaly_map}`;
+    photo.hidden = overlay.hidden = false;
+    photo.alt = `Pièce : ${CATEGORIES[state.category].toLowerCase()}`;
+    updateOverlay();
+
+    const fail = r.decision === "anomaly";
+    const tag = $("tag");
+    tag.dataset.verdict = fail ? "fail" : "pass";
+    tag.classList.remove("stamp"); void tag.offsetWidth; tag.classList.add("stamp");
+    $("tagKicker").textContent = `${CATEGORIES[state.category]}, ${state.shift ? LIGHTS.find((l) => l.id === state.shift).label.toLowerCase() : "lumière normale"}`;
+    $("verdict").textContent = fail ? "Défaut détecté" : "Conforme";
+    const [sTxt, tTxt] = pair(r.score, r.threshold);
+    $("explain").textContent = fail
+      ? `Le score de suspicion (${sTxt}) dépasse la limite (${tTxt}). Les zones en rouge montrent où le modèle voit un problème.`
+      : `Le score de suspicion (${sTxt}) ne dépasse pas la limite (${tTxt}). Le modèle ne voit rien d'anormal.`;
+
+    $("gauge").hidden = false;
+    const scale = Math.max(1, r.score * 1.1, r.threshold * 1.25);
+    $("gaugeFill").style.width = `${Math.min(100, (r.score / scale) * 100)}%`;
+    $("gaugeLimit").style.left = `${Math.min(100, (r.threshold / scale) * 100)}%`;
+    $("limitLabel").textContent = `Limite ${fmt(r.threshold)}${r.threshold_source === "calibrated" ? " (recalibrée)" : ""}`;
+
+    const advice = $("advice");
+    let msg = "";
+    const lightKey = state.shift ? `${state.shift}:${state.severity}` : "normal";
+    if (r.threshold_source === "calibrated" && state.calibratedFor && state.calibratedFor.key !== lightKey)
+      msg = `La limite a été recalibrée pour : ${state.calibratedFor.label}. Pour la lumière actuelle, recalibrez-la ou revenez à la limite d'origine.`;
+    else if (fail && state.image.kind === "good" && state.shift) msg = "Cette pièce est saine : c'est la lumière qui trompe le modèle. Recalibrez la limite pour cette lumière, juste en dessous.";
+    else if (!fail && state.image.kind === "bad") msg = "Cette pièce est abîmée mais le défaut est passé inaperçu. Essayez la méthode LightShift ou une limite plus stricte.";
+    else if (fail && state.image.kind === "bad" && r.threshold_source === "calibrated") msg = "Même après recalibration, le défaut reste détecté : la limite a bougé sans laisser passer les vraies pièces abîmées.";
+    advice.textContent = msg; advice.classList.toggle("show", !!msg);
+
+    $("details").hidden = false;
+    $("dScore").textContent = fmt(r.score);
+    $("dLimit").textContent = `${fmt(r.threshold)} (${r.threshold_source === "calibrated" ? "recalibrée" : "par défaut"})`;
+    $("dMethod").textContent = r.method === "baseline" ? "Modèle d'origine (PatchCore)" : "LightShift";
+    $("dTime").textContent = `${Math.round(r.inference_time_ms)} ms`;
+    $("dVersion").textContent = r.model_version;
+    $("step3").dataset.done = "true";
+
+    addHistory(photo.src, fail);
+  }
+
+  function renderError(message) {
+    const tag = $("tag"); tag.dataset.verdict = "idle";
+    $("verdict").textContent = "Analyse impossible";
+    $("explain").textContent = message;
+    $("gauge").hidden = true; $("advice").classList.remove("show");
+  }
+
+  function updateOverlay() { $("overlay").style.opacity = $("overlayRange").value / 100; }
+
+  function addHistory(src, fail) {
+    state.history.unshift({ src, fail, label: `${CATEGORIES[state.category]}, ${state.shift ? LIGHTS.find((l) => l.id === state.shift).label.toLowerCase() : "normale"}` });
+    state.history = state.history.slice(0, 12);
+    $("historyEmpty").hidden = true;
+    $("history").innerHTML = state.history.map((h) =>
+      `<li data-verdict="${h.fail ? "fail" : "pass"}"><img src="${h.src}" alt=""><div>${h.fail ? "Défaut" : "Conforme"}</div><div>${h.label}</div></li>`).join("");
+  }
+
+  // ------------------------------------------------------------------ recalibration
+  function minImages(alpha) { let n = 1; while (Math.ceil((n + 1) * (1 - alpha) - 1e-12) > n) n++; return n; }
+
+  function updateRecalHint() {
+    const need = minImages(state.alpha);
+    const files = $("recalFiles").files;
+    const real = (state.examplesSource || {})[state.category] === "mvtec";
+    $("recalSourceHint").textContent = state.source === "generated"
+      ? (real
+        ? (((state.calibPool || {})[state.category] ?? 0) < need
+          ? `Seulement ${(state.calibPool || {})[state.category] ?? 0} photos saines MVTec sont réservées à la recalibration pour cette pièce : il en faut au moins ${need} pour ce réglage. Choisissez une tolérance plus large.`
+          : `On prend ${Math.min((state.calibPool || {})[state.category], Math.max(20, need))} photos saines MVTec réservées à la recalibration (jamais proposées à l'essai) et on leur applique la lumière choisie.`)
+        : `On génère ${Math.max(20, need)} pièces saines et on leur applique la lumière choisie (au moins ${need} sont nécessaires pour ce réglage).`)
+      : (files.length ? `${files.length} photo(s) choisie(s). Il en faut au moins ${need}.` : `Choisissez au moins ${need} photos de pièces saines prises sous la nouvelle lumière.`);
+  }
+
+  async function recalibrate() {
+    const btn = $("recalBtn"), out = $("recalResult");
+    out.className = "result-line"; out.textContent = "Calcul en cours…"; btn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append("category", state.category); fd.append("alpha", String(state.alpha)); fd.append("method", state.method);
+      if (state.source === "generated") {
+        const need = minImages(state.alpha), pool = (state.calibPool || {})[state.category];
+        if (pool != null && pool < need)
+          throw new Error(`Il n'y a que ${pool} photos saines réservées à la recalibration pour cette pièce, alors qu'il en faut au moins ${need} pour ce réglage. Choisissez une tolérance plus large (1 sur 10 ou 1 sur 5), ou importez vos propres photos.`);
+        const n = pool != null ? Math.min(pool, Math.max(20, need)) : Math.max(20, need);
+        const blobs = await Promise.all([...Array(n)].map((_, i) => exampleBlob("calibration", i)));
+        blobs.forEach((b, i) => fd.append("images", b, `saine-${i}.png`));
+        if (state.shift) { fd.append("shift", state.shift); fd.append("severity", String(state.severity)); }
+      } else {
+        const files = [...$("recalFiles").files];
+        if (!files.length) { $("recalFiles").click(); throw new Error("Choisissez d'abord vos photos de pièces saines."); }
+        files.forEach((f) => fd.append("images", f, f.name));
+      }
+      const r = await api("/calibrate", { method: "POST", body: fd });
+      $("beforeAfter").hidden = false;
+      $("baBefore").textContent = `Limite ${fmt(r.previous_threshold)}`;
+      $("baAfter").textContent = `Limite ${fmt(r.new_threshold)}`;
+      out.className = "result-line ok";
+      out.textContent = `Limite recalibrée à partir de ${r.n_images} pièces saines. Sous cette lumière, au plus ${Math.round(r.alpha * 100)}\u00a0% de fausses alertes en moyenne.`;
+      if (state.driftFor) { state.driftFor = null; }
+      state.calibratedFor = { key: state.shift ? `${state.shift}:${state.severity}` : "normal", label: $("recalLightLabel").textContent.replace("Lumière : ", "") };
+      analyse();
+    } catch (err) {
+      out.className = "result-line err"; out.textContent = err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  async function resetCalibration() {
+    const r = await api(`/calibrate/${state.category}?method=${state.method}`, { method: "DELETE" });
+    $("beforeAfter").hidden = true;
+    state.calibratedFor = null;
+    state.driftFor = null;
+    $("recalResult").className = "result-line";
+    $("recalResult").textContent = `Limite d'origine rétablie (${fmt(r.threshold)}).`;
+    analyse();
+  }
+
+  // ------------------------------------------------------------------ évènements
+  const dz = $("dropzone");
+  dz.addEventListener("click", (e) => { if (!e.target.closest("[data-example]")) $("fileInput").click(); });
+  dz.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); } });
+  // Glisser-déposer sur toute la cabine, même quand une pièce est déjà affichée
+  const stage = $("stage");
+  ["dragenter", "dragover"].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); stage.classList.add("drag"); dz.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); stage.classList.remove("drag"); dz.classList.remove("drag"); }));
+  stage.addEventListener("drop", (e) => pickFile(e.dataTransfer.files[0]));
+  $("fileInput").addEventListener("change", (e) => { pickFile(e.target.files[0]); e.target.value = ""; });
+  $("changePart").addEventListener("click", () => $("fileInput").click());
+  document.querySelectorAll("[data-example]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); loadExample(b.dataset.example); }));
+  $("overlayRange").addEventListener("input", updateOverlay);
+
+  bindPressedGroup("severity", "sev", (v) => { state.severity = Number(v); renderLights(); analyse(); });
+  bindPressedGroup("methods", "method", (v) => { state.method = v; analyse(); });
+  bindPressedGroup("alphas", "alpha", (v) => { state.alpha = Number(v); updateRecalHint(); });
+  bindPressedGroup("recalSource", "source", (v) => { state.source = v; if (v === "upload") $("recalFiles").click(); updateRecalHint(); });
+  $("recalFiles").addEventListener("change", updateRecalHint);
+  $("recalBtn").addEventListener("click", recalibrate);
+  $("driftBtn").addEventListener("click", measureDrift);
+  $("resetBtn").addEventListener("click", resetCalibration);
+
+  renderCategories(); renderLights(); updateRecalHint(); checkHealth();
+})();
+</script>
+</body>
+</html>

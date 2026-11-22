@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      args:
+        INSTALL_PATCHCORE: ${INSTALL_PATCHCORE:-false}
+    environment:
+      MODEL_BACKEND: ${MODEL_BACKEND:-mock}
+      CHECKPOINT_ROOT: /code/results/Patchcore/MVTecAD
+    volumes:
+      - ./results/Patchcore:/code/results/Patchcore:ro   # checkpoints (si backend patchcore)
+      - app_state:/code/app_state                        # seuils recalibrés
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  app_state:

@@ -30,3 +30,7 @@ Thumbs.db
 
 # Intermediate evaluation backup
 results/lighting_evaluation_backup_30.csv
+
+# Application (membre 3)
+app_state/
+.pytest_cache/

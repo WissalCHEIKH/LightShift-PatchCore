@@ -475,7 +475,61 @@ python src/evaluation/check_mask_alignment.py
 
 The evaluation scripts require the trained model checkpoints and the locally prepared dataset.
 
-## 10. Further Experimental Comparisons
+## 10. Application and Interactive Demo (Member 3)
+
+A FastAPI service and a web interface ("inspection bench") to use and demonstrate PatchCore under
+lighting changes. The interface is served by the API itself: one program to run.
+
+![Demo: a healthy part triggers a false alarm under yellow light, then passes after recalibration](docs/images/demo.gif)
+
+| Defect detected (red = suspicious areas) | False alarm caused by yellow light | After recalibration (B3) |
+|---|---|---|
+| ![Defect detected](docs/images/01-defaut-detecte.jpg) | ![False alarm under yellow light](docs/images/02-fausse-alerte-lumiere.jpg) | ![After recalibration](docs/images/03-apres-recalibration.jpg) |
+
+| Original PatchCore vs LightShift on the same part | Score drift across the 15 lighting conditions |
+|---|---|
+| ![Side-by-side comparison](docs/images/04-comparaison-cote-a-cote.jpg) | ![Score drift view](docs/images/05-derive-des-scores.jpg) |
+
+*Screenshots taken in demo mode (drawn parts, demo model): they illustrate the interface, not experimental results.*
+
+### Run it
+
+**Windows:** double-click `run_app.bat` (first run creates `.venv` and installs the dependencies).
+**Linux / macOS:** `./run_app.sh`
+
+Or manually:
+
+```bash
+python -m venv .venv
+.venv\Scripts\Activate.ps1           # Linux/macOS: source .venv/bin/activate
+python -m pip install -r requirements-app.txt
+python -m uvicorn app.api.main:app --reload
+```
+
+Then open **http://localhost:8000** (interface) and **http://localhost:8000/docs** (API documentation).
+
+### Two modes
+
+| Mode | What you need | What the "Try" buttons show |
+|---|---|---|
+| **Demo** (default) | Nothing (`requirements-app.txt` only) | Drawn example parts, judged by a small PatchCore-like demo model (no scientific value) |
+| **Real PatchCore** | MVTec AD in `data/raw/`, the 3 checkpoints in `results/Patchcore/`, `requirements.txt` installed | Real MVTec AD test photos (file name and defect type shown) |
+
+Real mode: check the setup with `python scripts/check_patchcore.py`, then start with
+`MODEL_BACKEND=patchcore` (PowerShell: `$env:MODEL_BACKEND="patchcore"`).
+
+### Features
+
+- `/predict`, `/calibrate` (B3 conformal threshold), `/drift`, `/health`, `/metrics` (latency p50/p95)
+- Lighting console using the same transformations as `src/augmentation/lighting_shifts.py`
+- Side-by-side comparison: original PatchCore vs LightShift on the same image
+- Score drift view across the 15 lighting conditions
+- Guided recalibration for a new lighting condition
+- Tests (`python -m pytest -q`), Docker (`docker compose up --build`), GitHub Actions CI
+
+Full documentation: [`app/README.md`](app/README.md) · API contract: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md)
+
+## 11. Further Experimental Comparisons
 
 The PatchCore baseline provides a reference for evaluating potential improvements in robustness to lighting distribution shifts.
 
@@ -489,7 +543,7 @@ These methods will be compared with the PatchCore baseline to investigate their 
 
 For a fair comparison, the calibration and test protocol should be consistent and independent across the evaluated methods.
 
-## 11. References
+## 12. References
 
 - [MVTec Anomaly Detection Dataset](https://www.mvtec.com/research-teaching/datasets/mvtec-ad)
 - [Anomalib Documentation — Version 2.7.1](https://anomalib.readthedocs.io/en/lib-v2.7.1/)
